@@ -11,6 +11,8 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using Excel = Microsoft.Office.Interop.Excel;
@@ -36,28 +38,39 @@ namespace ExtractData
                 string sourceFile = @"C:\Temp\delivery-days.xlsx";
                 string destFile = @"C:\Temp\delivery-days-result.xlsx";
                 ep.LoadExcelSheet(sourceFile, 1);
-                for (int i = 2; i <= 10; i++)
+                //ep.range.Rows.Count
+                var tasks = new List<Task>();
+                for (int i = 2; i <= 4; i++)
                 {
+                    //ep.range.Columns.Count
                     for (int j = 8; j <= 10; j++)
                     {
-                        var storeCode = (string)(ep.range.Cells[i, 5] as Excel.Range).Value;
-                        var desCode = (string)(ep.range.Cells[1, j] as Excel.Range).Value;
-
-                        var deliveryDays = SnatchdeliveryDays(storeCode, desCode).Result;
-                        if (deliveryDays != null)
+                        Console.WriteLine("Get value for Cell[{0} {1}]", i, j);
+                        int[] cell = {i,j};
+                        tasks.Add(Task.Factory.StartNew(c => 
                         {
-                            ep.xlWorkSheet.Cells[i, j] = string.Format("{0},{1}", deliveryDays.Item1, deliveryDays.Item2);
-                            //Console.WriteLine(string.Format("[{0} {1}]: {2}", i, j, deliveryDays.Item1 + "/" + deliveryDays.Item2));
-                        }
-                        //ep.xlWorkSheet.Cells[i, j] = string.Format("{0},{1}", i, j);
-                        Console.WriteLine("Get Next Value");
+                            var indices = c as int[];
+                            var storeCode = (string)(ep.range.Cells[indices[0], 5] as Excel.Range).Value;
+                            var desCode = (string)(ep.range.Cells[1, indices[1]] as Excel.Range).Value;
+                            string[] codes = { storeCode, desCode };
+                            var deliveryDays = SnatchdeliveryDays(codes).Result;
+                            if (deliveryDays != null)
+                            {
+                                ep.xlWorkSheet.Cells[indices[0], indices[1]] = string.Format("{0},{1}", deliveryDays.Item1, deliveryDays.Item2);
+                                //Console.WriteLine(string.Format("[{0} {1}]: {2}", i, j, deliveryDays.Item1 + "/" + deliveryDays.Item2));
+                            }
+                        }, cell));                        
                     }
                 }
-                ep.xlWorkBook.SaveAs(destFile, Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault, Type.Missing, Type.Missing,false, false, Microsoft.Office.Interop.Excel.XlSaveAsAccessMode.xlNoChange,Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
+                var finalTask = Task.Factory.ContinueWhenAll(tasks.ToArray(), snatchingTask => 
+                {
+                    ep.xlWorkBook.SaveAs(destFile, Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault, Type.Missing, Type.Missing, false, false, Microsoft.Office.Interop.Excel.XlSaveAsAccessMode.xlNoChange, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
+                });
+                finalTask.Wait();
             }
         }
 
-        private static async Task<Tuple<string,string>> SnatchdeliveryDays(string storeCode, string desCode)
+        private static async Task<Tuple<string,string>> SnatchdeliveryDays(string[] codes)
         {
             try
             {
@@ -67,9 +80,9 @@ namespace ExtractData
                 param.Add("lang", "en");
                 param.Add("language", "en");
                 param.Add("service", "Small Bus");
-                param.Add("srccode", storeCode);
+                param.Add("srccode", codes[0]);
                 param.Add("desttype", "single");
-                param.Add("destcode", desCode);
+                param.Add("destcode", codes[1]);
                 param.Add("ctl00$ctl00$SegmentContent$Content$SubmitBtn2", "Submit");
                 var content = CreateFormEncodedData(param);
                 using (var rsp = await httpClient.PostAsync(link, content))
@@ -170,4 +183,66 @@ namespace ExtractData
         }
     }
 
+    //public class Example
+    //{
+    //    public static void Main()
+    //    {
+    //        string[] filenames = { "chapter1.txt", "chapter2.txt", 
+    //                         "chapter3.txt", "chapter4.txt",
+    //                         "chapter5.txt" };
+    //        string pattern = @"\b\w+\b";
+    //        var tasks = new List<Task>();
+    //        int totalWords = 0;
+
+    //        // Determine the number of words in each file.
+    //        foreach (var filename in filenames)
+    //            tasks.Add(Task.Factory.StartNew(fn =>
+    //            {
+    //                if (!File.Exists(fn.ToString()))
+    //                    throw new FileNotFoundException("{0} does not exist.", filename);
+
+    //                StreamReader sr = new StreamReader(fn.ToString());
+    //                String content = sr.ReadToEnd();
+    //                sr.Close();
+    //                int words = Regex.Matches(content, pattern).Count;
+    //                Interlocked.Add(ref totalWords, words);
+    //                Console.WriteLine("{0,-25} {1,6:N0} words", fn, words);
+    //            },
+    //                                              filename));
+
+    //        var finalTask = Task.Factory.ContinueWhenAll(tasks.ToArray(), wordCountTasks =>
+    //        {
+    //            int nSuccessfulTasks = 0;
+    //            int nFailed = 0;
+    //            int nFileNotFound = 0;
+    //            foreach (var t in wordCountTasks)
+    //            {
+    //                if (t.Status == TaskStatus.RanToCompletion)
+    //                    nSuccessfulTasks++;
+
+    //                if (t.Status == TaskStatus.Faulted)
+    //                {
+    //                    nFailed++;
+    //                    t.Exception.Handle((e) =>
+    //                    {
+    //                        if (e is FileNotFoundException)
+    //                            nFileNotFound++;
+    //                        return true;
+    //                    });
+    //                }
+    //            }
+    //            Console.WriteLine("\n{0,-25} {1,6} total words\n",
+    //                              String.Format("{0} files", nSuccessfulTasks),
+    //                              totalWords);
+    //            if (nFailed > 0)
+    //            {
+    //                Console.WriteLine("{0} tasks failed for the following reasons:", nFailed);
+    //                Console.WriteLine("   File not found:    {0}", nFileNotFound);
+    //                if (nFailed != nFileNotFound)
+    //                    Console.WriteLine("   Other:          {0}", nFailed - nFileNotFound);
+    //            }
+    //        });
+    //        finalTask.Wait();
+    //    }
+    //}
 }
