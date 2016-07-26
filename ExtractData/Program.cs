@@ -112,6 +112,8 @@ namespace ExtractData
             var lines = File.ReadAllLines(sourceFile);
             var destCodes = lines[0].Split(',');
             StringBuilder sb = new StringBuilder();
+            var tasks = new List<Task>();
+
             for (int i = 0; i < lines.Length; i++)
             {
                 var line = lines[i];
@@ -120,7 +122,14 @@ namespace ExtractData
                 var storeCode = codes[0];
                 for (int j = 1; j < codes.Length; j++)
                 {
-                    if()
+                    if (codes[j].Contains("origin"))
+                    {
+                        string[] pairOfCode = { storeCode , codes[j].Replace("origin", "") };
+                        Task.Factory.StartNew(async POC => 
+                        {
+                           var result = await SnatchdeliveryDays(POC as string[]);
+                        }, pairOfCode);
+                    }
                 }
                 sb.AppendLine(string.Join(",", codes));
             }
@@ -171,6 +180,7 @@ namespace ExtractData
                         //        //Console.WriteLine(string.Format("[{0} {1}]: {2}", i, j, deliveryDays.Item1 + "/" + deliveryDays.Item2));
                         //    }
                         //}, cell));
+
                         //var finalTask = Task.Factory.ContinueWhenAll(tasks.ToArray(), snatchingTask =>
                         //{
                         //    ep.xlWorkBook.SaveAs(destFile, Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault, Type.Missing, Type.Missing, false, false, Microsoft.Office.Interop.Excel.XlSaveAsAccessMode.xlNoChange, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
