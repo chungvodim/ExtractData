@@ -27,8 +27,8 @@ namespace ExtractData
         
         static void Main(string[] args)
         {
-            FilterStore();
-            //GetDeliveryDays();
+            //FilterStore();
+            GetDeliveryDays1();
         }
 
         public static void FilterStore()
@@ -111,29 +111,40 @@ namespace ExtractData
             string destFile = @"C:\Temp\finalResult.txt";
             var lines = File.ReadAllLines(sourceFile);
             var destCodes = lines[0].Split(',');
-            StringBuilder sb = new StringBuilder();
-            var tasks = new List<Task>();
 
+            // lines.Length
             for (int i = 0; i < lines.Length; i++)
             {
+                StringBuilder sb = new StringBuilder();
                 var line = lines[i];
                 var codes = line.Split(',');
                 Dictionary<string, string> dict = new Dictionary<string, string>();
                 var storeCode = codes[0];
+                var tasks = new List<Task>();
+
                 for (int j = 1; j < codes.Length; j++)
                 {
                     if (codes[j].Contains("origin"))
                     {
-                        string[] pairOfCode = { storeCode , codes[j].Replace("origin", "") };
-                        Task.Factory.StartNew(async POC => 
+                        string[] inputCodes = { storeCode , codes[j].Replace("origin", ""), i.ToString(), j.ToString() };
+                        tasks.Add(Task.Factory.StartNew(ics => 
                         {
-                           var result = await SnatchdeliveryDays(POC as string[]);
-                        }, pairOfCode);
+                            string[] inputs = ics as string[];
+                            var result = SnatchdeliveryDays(inputs).Result;
+                            if(result != null)
+                            {
+                                codes[int.Parse(inputs[3])] = string.Format("{0}-{1}-{2}", inputs[1], result.Item1, result.Item2);
+                            }
+                        }, inputCodes));
                     }
                 }
-                sb.AppendLine(string.Join(",", codes));
+                var finalTask = Task.Factory.ContinueWhenAll(tasks.ToArray(), ts => 
+                {
+                    sb.AppendLine(string.Join(",", codes));
+                });
+                finalTask.Wait();
+                File.AppendAllText(destFile, sb.ToString());
             }
-            File.WriteAllText(destFile, sb.ToString());
         }
 
         public static void GetDeliveryDays()
@@ -142,6 +153,7 @@ namespace ExtractData
             {
                 //string sourceFile = Console.ReadLine();
                 string sourceFile = @"C:\Temp\delivery-days.xlsx";
+                string destFile = @"C:\Temp\finalResult.xlsx";
                 ep.LoadExcelSheet(sourceFile, 1);
                 //ep.range.Rows.Count
                 var tasks = new List<Task>();
@@ -152,24 +164,10 @@ namespace ExtractData
                     {
 
                         int[] cell = { i, j };
-                        tasks.Add(new Task(c =>
-                        {
-                            var indices = c as int[];
-                            var storeCode = (string)(ep.range.Cells[indices[0], 5] as Excel.Range).Value;
-                            var desCode = (string)(ep.range.Cells[1, indices[1]] as Excel.Range).Value;
-                            string[] codes = { storeCode, desCode };
-                            var deliveryDays = SnatchdeliveryDays(codes).Result;
-                            if (deliveryDays != null)
-                            {
-                                ep.xlWorkSheet.Cells[indices[0], indices[1]] = string.Format("{0},{1}", deliveryDays.Item1, deliveryDays.Item2);
-                                //Console.WriteLine(string.Format("[{0} {1}]: {2}", i, j, deliveryDays.Item1 + "/" + deliveryDays.Item2));
-                            }
-                        }, cell));
 
-                        //tasks.Add(Task.Factory.StartNew(c => 
+                        //tasks.Add(new Task(c =>
                         //{
                         //    var indices = c as int[];
-                        //    Console.WriteLine("Get value for Cell[{0} {1}]", indices[0], indices[1]);
                         //    var storeCode = (string)(ep.range.Cells[indices[0], 5] as Excel.Range).Value;
                         //    var desCode = (string)(ep.range.Cells[1, indices[1]] as Excel.Range).Value;
                         //    string[] codes = { storeCode, desCode };
@@ -181,11 +179,26 @@ namespace ExtractData
                         //    }
                         //}, cell));
 
-                        //var finalTask = Task.Factory.ContinueWhenAll(tasks.ToArray(), snatchingTask =>
-                        //{
-                        //    ep.xlWorkBook.SaveAs(destFile, Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault, Type.Missing, Type.Missing, false, false, Microsoft.Office.Interop.Excel.XlSaveAsAccessMode.xlNoChange, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
-                        //});
-                        //finalTask.Wait();
+                        tasks.Add(Task.Factory.StartNew(c =>
+                        {
+                            var indices = c as int[];
+                            Console.WriteLine("Get value for Cell[{0} {1}]", indices[0], indices[1]);
+                            var storeCode = (string)(ep.range.Cells[indices[0], 5] as Excel.Range).Value;
+                            var desCode = (string)(ep.range.Cells[1, indices[1]] as Excel.Range).Value;
+                            string[] codes = { storeCode, desCode };
+                            var deliveryDays = SnatchdeliveryDays(codes).Result;
+                            if (deliveryDays != null)
+                            {
+                                ep.xlWorkSheet.Cells[indices[0], indices[1]] = string.Format("{0},{1}", deliveryDays.Item1, deliveryDays.Item2);
+                                //Console.WriteLine(string.Format("[{0} {1}]: {2}", i, j, deliveryDays.Item1 + "/" + deliveryDays.Item2));
+                            }
+                        }, cell));
+
+                        var finalTask = Task.Factory.ContinueWhenAll(tasks.ToArray(), snatchingTask =>
+                        {
+                            ep.xlWorkBook.SaveAs(destFile, Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault, Type.Missing, Type.Missing, false, false, Microsoft.Office.Interop.Excel.XlSaveAsAccessMode.xlNoChange, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
+                        });
+                        finalTask.Wait();
                     }
                 }
             }
@@ -195,6 +208,7 @@ namespace ExtractData
         {
             try
             {
+                Console.WriteLine("Get delivery days for {0}/{1}/{2}/{3}", codes[0], codes[1], codes[2], codes[3]);
                 httpClient = new HttpClient();
                 var link = "https://www.canadapost.ca/business/tools/ds/dspage.aspx";
                 var param = new NameValueCollection();
@@ -211,8 +225,8 @@ namespace ExtractData
                     var page = await rsp.Content.ReadAsStringAsync();
                     var doc = new HtmlDocument();
                     doc.LoadHtml(page);
-                    var PriorityDays = doc.DocumentNode.SelectSingleNode(@"//*[@id=""tableContent""]/table/tr/td[2]/table/tr[3]/td[2]").InnerText.Replace("days","").Trim();
-                    var XpresspostDays = doc.DocumentNode.SelectSingleNode(@"//*[@id=""tableContent""]/table/tr/td[2]/table/tr[3]/td[3]").InnerText.Replace("days", "").Trim();
+                    var PriorityDays = doc.DocumentNode.SelectSingleNode(@"//*[@id=""tableContent""]/table/tr/td[2]/table/tr[3]/td[2]").InnerText.Replace("days","").Replace("day", "").Trim();
+                    var XpresspostDays = doc.DocumentNode.SelectSingleNode(@"//*[@id=""tableContent""]/table/tr/td[2]/table/tr[3]/td[3]").InnerText.Replace("days", "").Replace("day", "").Trim();
                     return new Tuple<string, string>(PriorityDays, XpresspostDays);
                 }
             }
