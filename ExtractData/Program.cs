@@ -28,7 +28,8 @@ namespace ExtractData
         static void Main(string[] args)
         {
             //FilterStore();
-            GetDeliveryDays1();
+            //GetDeliveryDays1();
+            Normalize();
         }
 
         public static void FilterStore()
@@ -108,9 +109,8 @@ namespace ExtractData
         public static void GetDeliveryDays1()
         {
             string sourceFile = @"C:\Temp\filteredStoredest.txt";
-            string destFile = @"C:\Temp\finalResult.txt";
+            string destFile = @"C:\Temp\tempResult.txt";
             var lines = File.ReadAllLines(sourceFile);
-            var destCodes = lines[0].Split(',');
 
             // lines.Length
             for (int i = 0; i < lines.Length; i++)
@@ -138,11 +138,14 @@ namespace ExtractData
                         }, inputCodes));
                     }
                 }
-                var finalTask = Task.Factory.ContinueWhenAll(tasks.ToArray(), ts => 
+                if(tasks.Count > 0)
                 {
-                    sb.AppendLine(string.Join(",", codes));
-                });
-                finalTask.Wait();
+                    var finalTask = Task.Factory.ContinueWhenAll(tasks.ToArray(), ts =>
+                    {
+                        sb.AppendLine(string.Join(",", codes));
+                    });
+                    finalTask.Wait();
+                }
                 File.AppendAllText(destFile, sb.ToString());
             }
         }
@@ -153,7 +156,7 @@ namespace ExtractData
             {
                 //string sourceFile = Console.ReadLine();
                 string sourceFile = @"C:\Temp\delivery-days.xlsx";
-                string destFile = @"C:\Temp\finalResult.xlsx";
+                string destFile = @"C:\Temp\tempResult.xlsx";
                 ep.LoadExcelSheet(sourceFile, 1);
                 //ep.range.Rows.Count
                 var tasks = new List<Task>();
@@ -202,6 +205,39 @@ namespace ExtractData
                     }
                 }
             }
+        }
+
+        public static void Normalize()
+        {
+            string sourceFile = @"C:\Temp\tempResult.txt";
+            string destFile = @"C:\Temp\finalResult.csv";
+            var lines = File.ReadAllLines(sourceFile);
+            StringBuilder sb = new StringBuilder();
+
+            // lines.Length
+            for (int i = 0; i < lines.Length; i++)
+            {
+                var deliverdays = lines[i].Split(',');
+                Dictionary<string, string> dict = new Dictionary<string, string>();
+
+                for (int j = 1; j < deliverdays.Length; j++)
+                {
+                    string[] result = deliverdays[j].Split('-');
+                    if(result.Length > 2)
+                    {
+                        var finalResult = string.Format("{0}|{1}", result[1], result[2]);
+                        dict.Add(result[0], finalResult);
+                        deliverdays[j] = finalResult;
+                    }
+                    else if(dict.ContainsKey(result[0]))
+                    {
+                        deliverdays[j] = dict[result[0]];
+                    }
+                }
+                sb.AppendLine(string.Join(",", deliverdays));
+                //File.AppendAllText(destFile, sb.ToString());
+            }
+            File.WriteAllBytes(destFile, Encoding.UTF8.GetBytes(sb.ToString()));
         }
 
         private static async Task<Tuple<string,string>> SnatchdeliveryDays(string[] codes)
