@@ -28,8 +28,8 @@ namespace ExtractData
         static void Main(string[] args)
         {
             //FilterStore();
-            //GetDeliveryDays1();
-            Normalize();
+            GetDeliveryDays1();
+            //Normalize();
         }
 
         public static void FilterStore()
@@ -109,7 +109,7 @@ namespace ExtractData
         public static void GetDeliveryDays1()
         {
             string sourceFile = @"C:\Temp\filteredStoredest.txt";
-            string destFile = @"C:\Temp\tempResult.txt";
+            string destFile = @"C:\Temp\tempResult_test.txt";
             var lines = File.ReadAllLines(sourceFile);
 
             // lines.Length
@@ -263,6 +263,7 @@ namespace ExtractData
                     doc.LoadHtml(page);
                     var PriorityDays = doc.DocumentNode.SelectSingleNode(@"//*[@id=""tableContent""]/table/tr/td[2]/table/tr[3]/td[2]").InnerText.Replace("days","").Replace("day", "").Trim();
                     var XpresspostDays = doc.DocumentNode.SelectSingleNode(@"//*[@id=""tableContent""]/table/tr/td[2]/table/tr[3]/td[3]").InnerText.Replace("days", "").Replace("day", "").Trim();
+                    Console.WriteLine("Get data successful");
                     return new Tuple<string, string>(PriorityDays, XpresspostDays);
                 }
             }
