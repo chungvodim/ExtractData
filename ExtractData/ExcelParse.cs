@@ -9,7 +9,7 @@ namespace ExtractData
 {
     public class ExcelParse : IDisposable
     {
-        private Excel.Application xlApp;
+        public Excel.Application xlApp;
         public Excel.Workbook xlWorkBook;
         public Excel.Worksheet xlWorkSheet;
         public Excel.Range range;

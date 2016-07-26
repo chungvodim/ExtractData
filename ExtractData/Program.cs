@@ -27,7 +27,104 @@ namespace ExtractData
         
         static void Main(string[] args)
         {
-            GetDeliveryDays();
+            FilterStore();
+            //GetDeliveryDays();
+        }
+
+        public static void FilterStore()
+        {
+            string sourceFile = @"C:\Temp\storedest.txt";
+            string destFile = @"C:\Temp\filteredStoredest.txt";
+            var lines = File.ReadAllLines(sourceFile);
+            var destCodes = lines[0].Split(',');
+            StringBuilder sb = new StringBuilder();
+            for (int i = 1; i < lines.Length; i++)
+            {
+                var line = lines[i];
+                var rateCodes = line.Split(',');
+                Dictionary<string, string> dict = new Dictionary<string, string>();
+                for (int j = 1; j < rateCodes.Length; j++)
+                {
+                    if (!dict.ContainsKey(rateCodes[j]))
+                    {
+                        dict.Add(rateCodes[j], destCodes[j]);
+                        rateCodes[j] = "origin" + destCodes[j];
+                    }
+                    else
+                    {
+                        rateCodes[j] = dict[rateCodes[j]];
+                    }
+                }
+                sb.AppendLine(string.Join(",",rateCodes));
+            }
+            File.WriteAllText(destFile, sb.ToString());
+        }
+
+        public static void Minimize()
+        {
+            using (ExcelParse ep = new ExcelParse())
+            {
+                //string sourceFile = Console.ReadLine();
+                string sourceFile = @"C:\Temp\delivery-days-ss.xlsx";
+                string destFile = @"C:\Temp\filtered-delivery-days-ss.xlsx";
+
+                ep.xlApp.DisplayAlerts = false;
+                ep.LoadExcelSheet(sourceFile, 3);
+                //var tasks = new List<Task>();
+                Console.WriteLine(ep.xlWorkSheet.Name);
+                Console.WriteLine("{0}/{1}", ep.range.Rows.Count, ep.range.Columns.Count);
+                Dictionary<string, string> dict = new Dictionary<string, string>();
+                for (int i = 2; i <= ep.range.Rows.Count; i++)
+                {
+                    for (int j = 5; j <= ep.range.Columns.Count; j++)
+                    {
+                        int[] cell = { i, j };
+                        var r = cell[0];
+                        var c = cell[1];
+
+                        Console.WriteLine("{0}/{1}", r, c);
+                        var storeCode = (string)(ep.range.Cells[r, 4] as Excel.Range).Value;
+                        var desCode = (string)(ep.range.Cells[1, c] as Excel.Range).Value;
+                        var rateCode = (double)(ep.range.Cells[r, c] as Excel.Range).Value;
+                        var key = string.Format("{0}{1}", storeCode, rateCode);
+                        if (!dict.ContainsKey(key))
+                        {
+                            dict.Add(key, string.Format("{0},{1}", storeCode, desCode));
+                            ep.xlWorkSheet.Cells[r, c] = string.Empty;
+                        }
+                        else
+                        {
+                            ep.xlWorkSheet.Cells[r, c] = dict[key];
+                        }
+                    }
+                    Console.WriteLine("saving file");
+                    ep.xlWorkBook.SaveAs(destFile, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Excel.XlSaveAsAccessMode.xlNoChange, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
+                    Console.WriteLine("finish saving file");
+                }
+                Console.WriteLine("finishing minimizing");
+            }
+        }
+
+        public static void GetDeliveryDays1()
+        {
+            string sourceFile = @"C:\Temp\filteredStoredest.txt";
+            string destFile = @"C:\Temp\finalResult.txt";
+            var lines = File.ReadAllLines(sourceFile);
+            var destCodes = lines[0].Split(',');
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+                var codes = line.Split(',');
+                Dictionary<string, string> dict = new Dictionary<string, string>();
+                var storeCode = codes[0];
+                for (int j = 1; j < codes.Length; j++)
+                {
+                    if()
+                }
+                sb.AppendLine(string.Join(",", codes));
+            }
+            File.WriteAllText(destFile, sb.ToString());
         }
 
         public static void GetDeliveryDays()
@@ -36,7 +133,6 @@ namespace ExtractData
             {
                 //string sourceFile = Console.ReadLine();
                 string sourceFile = @"C:\Temp\delivery-days.xlsx";
-                string destFile = @"C:\Temp\delivery-days-result.xlsx";
                 ep.LoadExcelSheet(sourceFile, 1);
                 //ep.range.Rows.Count
                 var tasks = new List<Task>();
@@ -45,9 +141,9 @@ namespace ExtractData
                     //ep.range.Columns.Count
                     for (int j = 8; j <= 10; j++)
                     {
-                        Console.WriteLine("Get value for Cell[{0} {1}]", i, j);
-                        int[] cell = {i,j};
-                        tasks.Add(Task.Factory.StartNew(c => 
+
+                        int[] cell = { i, j };
+                        tasks.Add(new Task(c =>
                         {
                             var indices = c as int[];
                             var storeCode = (string)(ep.range.Cells[indices[0], 5] as Excel.Range).Value;
@@ -59,14 +155,29 @@ namespace ExtractData
                                 ep.xlWorkSheet.Cells[indices[0], indices[1]] = string.Format("{0},{1}", deliveryDays.Item1, deliveryDays.Item2);
                                 //Console.WriteLine(string.Format("[{0} {1}]: {2}", i, j, deliveryDays.Item1 + "/" + deliveryDays.Item2));
                             }
-                        }, cell));                        
+                        }, cell));
+
+                        //tasks.Add(Task.Factory.StartNew(c => 
+                        //{
+                        //    var indices = c as int[];
+                        //    Console.WriteLine("Get value for Cell[{0} {1}]", indices[0], indices[1]);
+                        //    var storeCode = (string)(ep.range.Cells[indices[0], 5] as Excel.Range).Value;
+                        //    var desCode = (string)(ep.range.Cells[1, indices[1]] as Excel.Range).Value;
+                        //    string[] codes = { storeCode, desCode };
+                        //    var deliveryDays = SnatchdeliveryDays(codes).Result;
+                        //    if (deliveryDays != null)
+                        //    {
+                        //        ep.xlWorkSheet.Cells[indices[0], indices[1]] = string.Format("{0},{1}", deliveryDays.Item1, deliveryDays.Item2);
+                        //        //Console.WriteLine(string.Format("[{0} {1}]: {2}", i, j, deliveryDays.Item1 + "/" + deliveryDays.Item2));
+                        //    }
+                        //}, cell));
+                        //var finalTask = Task.Factory.ContinueWhenAll(tasks.ToArray(), snatchingTask =>
+                        //{
+                        //    ep.xlWorkBook.SaveAs(destFile, Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault, Type.Missing, Type.Missing, false, false, Microsoft.Office.Interop.Excel.XlSaveAsAccessMode.xlNoChange, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
+                        //});
+                        //finalTask.Wait();
                     }
                 }
-                var finalTask = Task.Factory.ContinueWhenAll(tasks.ToArray(), snatchingTask => 
-                {
-                    ep.xlWorkBook.SaveAs(destFile, Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault, Type.Missing, Type.Missing, false, false, Microsoft.Office.Interop.Excel.XlSaveAsAccessMode.xlNoChange, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
-                });
-                finalTask.Wait();
             }
         }
 
